@@ -3,7 +3,7 @@
   "name": "thegrabber",
   "title": "Thegrabber",
   "description": "Why Join The Navy When You Can Use Thegrabber",
-  "icon": "assets/command-icon.png",
+  "icon": "icon.png",
   "author": "dck",
   "categories": [
     "Web"
@@ -24,7 +24,7 @@
       "title": "Download Links",
       "description": "Download one or more links (magnet or direct), unlocks and downloads automatically, zips if multiple.",
       "mode": "view",
-      "icon": "assets/command-icon.png",
+      "icon": "icon.png",
       "src": "src/downloadLinks.tsx"
     }
   ],
