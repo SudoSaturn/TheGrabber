@@ -1,0 +1,65 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "thegrabber",
+  "title": "Thegrabber",
+  "description": "Why Join The Navy When You Can Use Thegrabber",
+  "icon": "assets/command-icon.png",
+  "author": "dck",
+  "categories": [
+    "Web"
+  ],
+  "license": "MIT",
+  "preferences": [
+    {
+      "name": "apikey",
+      "description": "Alldebrid api key",
+      "type": "textfield",
+      "required": true,
+      "title": "API Key"
+    }
+  ],
+  "commands": [
+    {
+      "name": "downloadLinks",
+      "title": "Download Links",
+      "description": "Download one or more links (magnet or direct), unlocks and downloads automatically, zips if multiple.",
+      "mode": "view",
+      "icon": "assets/command-icon.png",
+      "src": "src/downloadLinks.tsx"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.99.4",
+    "@raycast/utils": "^1.5.2",
+    "@swan-io/boxed": "^1.0.1",
+    "archiver": "^7.0.1",
+    "axios": "^1.4.0",
+    "build": "^0.1.4",
+    "form-data": "^4.0.0",
+    "node-datachannel": "^0.27.0",
+    "puppeteer": "^24.10.0",
+    "ts-pattern": "^4.2.2"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "1.0.5",
+    "@types/archiver": "^6.0.3",
+    "@types/node": "18.8.3",
+    "@types/react": "18.0.9",
+    "eslint": "^7.32.0",
+    "prettier": "^2.5.1",
+    "typescript": "^4.4.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish"
+  },
+  "trustedDependencies": [
+    "bufferutil",
+    "node-datachannel",
+    "utf-8-validate",
+    "utp-native"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+    "files.autoSave": "onFocusChange",
+    "files.exclude": {
+        "**/.DS_Store": false,
+        "**/.git": false,
+        "**/.hg": false,
+        "**/.svn": false,
+        "**/Thumbs.db": false
+    }
+}
