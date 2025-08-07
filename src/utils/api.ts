@@ -8,10 +8,8 @@ import path from "path";
 
 const AGENT_NAME = "Raycast";
 
-// Helper: Add magnet link and poll until ready, then return direct links
 export async function resolveMagnet(magnet: string): Promise<Link[]> {
   const { apikey } = getPreferenceValues<Preferences>();
-  // 1. Upload magnet link
   const addResp = await axios.get("https://api.alldebrid.com/v4/magnet/upload", {
     params: {
       apikey,
@@ -21,7 +19,6 @@ export async function resolveMagnet(magnet: string): Promise<Link[]> {
   });
   if (addResp.data.status === "error") throw new Error("Failed to add magnet link");
   const magnetId = addResp.data.data.id;
-  // 2. Poll status until ready
   let status = "";
   let links: Link[] = [];
   for (let i = 0; i < 30; ++i) { // up to ~30s
@@ -46,7 +43,6 @@ export async function resolveMagnet(magnet: string): Promise<Link[]> {
   return links;
 }
 
-// Fetch and process the /getmagnet/<magnet_id> link
 export async function fetchGetMagnetContainer(magnetId: number, outDir: string): Promise<{ filePath: string, contentType: string }> {
   const url = `https://alldebrid.com/getmagnet/${magnetId}`;
   const outPath = path.join(outDir, `getmagnet-${magnetId}`);
@@ -59,7 +55,6 @@ export async function fetchGetMagnetContainer(magnetId: number, outDir: string):
     },
     maxRedirects: 5
   });
-  // Try to get filename from Content-Disposition header
   let fileName = undefined;
   const cd = response.headers["content-disposition"];
   if (cd) {
