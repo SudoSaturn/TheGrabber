@@ -15,11 +15,10 @@ const DOWNLOADS_DIR = path.join(process.env.HOME || "~", "Downloads", "alldebrid
 const HISTORY_FILE = path.join(DOWNLOADS_DIR, "downloads-history.json");
 
 function extractLinks(text: string): string[] {
-  // Regex for http(s) links only (no magnets since we removed that functionality)
+  // Regex for http(s) links
   const regex = /(https?:\/\/[^\s"']+)/gi;
   const matches = text.match(regex) || [];
   
-  // Filter out any non-URLs and trim whitespace
   const urls = matches
     .map(url => url.trim())
     .filter(url => {
@@ -266,7 +265,7 @@ export default function Command() {
           title: zipFilename,
           links: uniqueLinks,
           output: zipFilePath,
-          containedFiles: downloadedFilenames // Store the contained filenames
+          containedFiles: downloadedFilenames 
         });
         
         zipToast.hide();
@@ -276,7 +275,6 @@ export default function Command() {
           style: Toast.Style.Success 
         });
         
-        // Optionally delete the individual files after zipping
         downloadedFiles.forEach(file => {
           try {
             fs.unlinkSync(file);
@@ -285,7 +283,7 @@ export default function Command() {
           }
         });
       } 
-      // For single file downloads, save to history
+      //  single file downloads save to history
       else if (downloadedFiles.length === 1) {
         const filePath = downloadedFiles[0];
         const filename = downloadedFilenames[0];
@@ -326,19 +324,18 @@ export default function Command() {
 }
 
 async function downloadFile(url: string, filename: string) {
-  // Ensure filename is safe for filesystem
+  // Ensure filename is ok for filesystem
   filename = filename.replace(/[/\\?%*:|"<>]/g, '_');
   const filePath = path.join(DOWNLOADS_DIR, filename);
   const writer = fs.createWriteStream(filePath);
 
-  // Show a toast with progress
+  // Show toast with progress
   const progressToast = await showToast({
     title: `Downloading ${filename}`,
     message: "Starting download...",
     style: Toast.Style.Animated,
   });
 
-  // Use the real URL with proper headers
   const realUrl = wrapAlldebridLink(url);
   console.log(`[downloadFile] Downloading from: ${realUrl}`);
   
@@ -351,7 +348,7 @@ async function downloadFile(url: string, filename: string) {
         "Referer": "https://alldebrid.com/"
       },
       maxRedirects: 5,
-      timeout: 30000, // 30 second timeout
+      timeout: 30000, 
     });
 
   let downloadedBytes = 0;
@@ -361,19 +358,16 @@ async function downloadFile(url: string, filename: string) {
   response.data.on("data", (chunk: Buffer) => {
     downloadedBytes += chunk.length;
     
-    // Update progress toast every 500ms to avoid too many updates
     const now = Date.now();
     if (now - lastProgressUpdate > 500) {
       lastProgressUpdate = now;
       
-      // Calculate progress percentage if content-length is available
       if (totalBytes > 0) {
         const percentage = Math.round((downloadedBytes / totalBytes) * 100);
         const downloadedMB = (downloadedBytes / (1024 * 1024)).toFixed(2);
         const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
         progressToast.message = `${percentage}% (${downloadedMB}MB / ${totalMB}MB)`;
       } else {
-        // If content-length is not available, just show downloaded size
         const downloadedMB = (downloadedBytes / (1024 * 1024)).toFixed(2);
         progressToast.message = `${downloadedMB}MB downloaded`;
       }
@@ -395,14 +389,12 @@ async function downloadFile(url: string, filename: string) {
       reject(err);
     });
     
-    // Add timeout safety
     const timeout = setTimeout(() => {
       console.error(`[Download] Timeout after 5 minutes`);
       progressToast.hide();
       reject(new Error("Download timed out after 5 minutes"));
-    }, 5 * 60 * 1000); // 5 minutes timeout
+    }, 5 * 60 * 1000); 
     
-    // Clear timeout on success
     writer.on("finish", () => clearTimeout(timeout));
   });
   } catch (err) {
@@ -413,13 +405,11 @@ async function downloadFile(url: string, filename: string) {
 
   progressToast.hide();
   
-  // Verify the file exists and has content
   if (fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
     const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
     console.log(`[Download] Finished: ${filePath} (${sizeMB} MB)`);
     
-    // Check if file is empty or too small (less than 1KB)
     if (stats.size < 1024) {
       console.warn(`[Warning] Downloaded file is very small: ${stats.size} bytes`);
     }
@@ -432,26 +422,21 @@ async function downloadFile(url: string, filename: string) {
 
 async function zipFiles(filePaths: string[], outputPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Create output stream
     const output = fs.createWriteStream(outputPath);
     const archive = archiver("zip", {
-      zlib: { level: 6 } // Compression level (0-9)
+      zlib: { level: 6 }
     });
     
-    // Listen for all archive data to be written
     output.on("close", () => {
       resolve(outputPath);
     });
     
-    // Handle errors
     archive.on("error", (err: Error) => {
       reject(err);
     });
     
-    // Pipe archive data to the output file
     archive.pipe(output);
     
-    // Add each file to the archive
     for (const filePath of filePaths) {
       if (fs.existsSync(filePath)) {
         const filename = path.basename(filePath);
@@ -459,7 +444,6 @@ async function zipFiles(filePaths: string[], outputPath: string): Promise<string
       }
     }
     
-    // Finalize the archive
     archive.finalize();
   });
 }
