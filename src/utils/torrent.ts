@@ -1,10 +1,8 @@
-// @ts-ignore: No type definitions for webtorrent
 import WebTorrent from "webtorrent";
 import path from "path";
 import fs from "fs";
 import archiver from "archiver";
 
-// Types for callback and torrent objects are not available in webtorrent, so we use any
 export async function downloadMagnetAndZip(
   magnetURI: string,
   outDir: string,
@@ -24,7 +22,6 @@ export async function downloadMagnetAndZip(
       });
       torrent.on("done", async () => {
         client.destroy();
-        // Zip all files
         const zipPath = path.join(outDir, `magnet-download-${Date.now()}.zip`);
         const output = fs.createWriteStream(zipPath);
         const archive = archiver("zip", { zlib: { level: 9 } });
