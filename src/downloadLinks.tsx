@@ -15,7 +15,7 @@ const DOWNLOADS_DIR = path.join(process.env.HOME || "~", "Downloads", "alldebrid
 const HISTORY_FILE = path.join(DOWNLOADS_DIR, "downloads-history.json");
 
 function extractLinks(text: string): string[] {
-  // Regex for http(s) links
+ 
   const regex = /(https?:\/\/[^\s"']+)/gi;
   const matches = text.match(regex) || [];
   
@@ -47,7 +47,6 @@ export default function Command() {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
 
-  // Clipboard detection to automatically paste links
   useEffect(() => {
     async function fetchClipboard() {
       try {
@@ -64,11 +63,10 @@ export default function Command() {
       }
     }
     
-    // Only fetch clipboard if input is empty
     if (!input) {
       fetchClipboard();
     }
-  }, []); // Run only on component mount
+  }, []); 
 
   useEffect(() => {
     if (showHistory) {
@@ -100,11 +98,9 @@ export default function Command() {
         }
       >
         {history.map((entry, idx) => {
-          // Get filename without extension
           const fullFilename = entry.title || path.basename(entry.output || "");
           const filenameWithoutExt = fullFilename.replace(/\.[^/.]+$/, "");
           
-          // Get file size
           let fileSize = "";
           try {
             if (entry.output && fs.existsSync(entry.output)) {
@@ -115,7 +111,6 @@ export default function Command() {
             console.error("Error getting file size:", err);
           }
           
-          // Format date as a readable string
           const downloadDate = new Date(entry.date);
           const dateString = downloadDate.toLocaleDateString();
           const timeString = downloadDate.toLocaleTimeString();
@@ -143,7 +138,6 @@ export default function Command() {
       return;
     }
     
-    // Check for duplicate links
     const uniqueLinks = [...new Set(linkList)];
     if (uniqueLinks.length < linkList.length) {
       const duplicateCount = linkList.length - uniqueLinks.length;
@@ -154,7 +148,6 @@ export default function Command() {
       });
     }
     
-    // Check if links already exist in history
     let history: any[] = [];
     if (fs.existsSync(HISTORY_FILE)) {
       try {
@@ -164,26 +157,21 @@ export default function Command() {
       }
     }
     
-    // Create directory if it doesn't exist
     if (!fs.existsSync(DOWNLOADS_DIR)) {
       fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
     }
     
     try {
-      // Prepare for multiple downloads
       const downloadedFiles: string[] = [];
       const downloadedFilenames: string[] = [];
       
-      // Process each unique link
       for (const link of uniqueLinks) {
         try {
-          // Check if this link was previously downloaded
           const previousDownload = history.find(entry => 
             Array.isArray(entry.links) && entry.links.includes(link)
           );
           
           if (previousDownload) {
-            // Ask user if they want to download again
             const confirmToast = await showToast({
               title: "Link was previously downloaded",
               message: `Downloaded on ${new Date(previousDownload.date).toLocaleDateString()}. Re-downloading...`,
@@ -205,29 +193,23 @@ export default function Command() {
             const downloadUrl = result.value;
             console.log(`[Success] Got download URL: ${downloadUrl}`);
             
-            // Extract filename from URL, ensure it's not empty
             let filename = path.basename(new URL(downloadUrl).pathname);
             if (!filename || filename === "/") {
-              // If no filename in URL, use a generic one with timestamp
               filename = `download-${Date.now()}.bin`;
             }
             
-            // Ensure filename is URL decoded
             filename = decodeURIComponent(filename);
             console.log(`[Download] Starting download of: ${filename}`);
             
             const filePath = await downloadFile(downloadUrl, filename);
             console.log(`[Download] Completed: ${filePath}`);
             
-            // Add to our list of downloaded files
             downloadedFiles.push(filePath);
             downloadedFilenames.push(filename);
             
-            // If only one file, show individual success
             if (uniqueLinks.length === 1) {
               showToast({ title: "Download complete!", message: filePath, style: Toast.Style.Success });
             } else {
-              // For multiple files, show progress
               showToast({ 
                 title: `Download ${downloadedFiles.length}/${uniqueLinks.length} complete`, 
                 message: filename,
@@ -244,7 +226,6 @@ export default function Command() {
         }
       }
       
-      // Handle multiple downloads - zip them together
       if (downloadedFiles.length > 1) {
         const zipToast = await showToast({ 
           title: "Zipping files", 
@@ -252,14 +233,11 @@ export default function Command() {
           style: Toast.Style.Animated 
         });
         
-        // Create a zip file with timestamp to avoid name conflicts
         const zipFilename = `alldebrid-downloads-${Date.now()}.zip`;
         const zipFilePath = path.join(DOWNLOADS_DIR, zipFilename);
         
-        // Zip the files
         await zipFiles(downloadedFiles, zipFilePath);
         
-        // Save to history as a single entry
         saveHistory({
           date: new Date().toISOString(),
           title: zipFilename,
@@ -283,7 +261,6 @@ export default function Command() {
           }
         });
       } 
-      //  single file downloads save to history
       else if (downloadedFiles.length === 1) {
         const filePath = downloadedFiles[0];
         const filename = downloadedFilenames[0];
@@ -324,12 +301,10 @@ export default function Command() {
 }
 
 async function downloadFile(url: string, filename: string) {
-  // Ensure filename is ok for filesystem
   filename = filename.replace(/[/\\?%*:|"<>]/g, '_');
   const filePath = path.join(DOWNLOADS_DIR, filename);
   const writer = fs.createWriteStream(filePath);
 
-  // Show toast with progress
   const progressToast = await showToast({
     title: `Downloading ${filename}`,
     message: "Starting download...",
