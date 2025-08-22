@@ -31,7 +31,6 @@ A Raycast extension for downloading using AllDebrid.
 
 ```bash
 bun install
-bun run build
 bun run dev
 ```
 
