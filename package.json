@@ -2,9 +2,9 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "thegrabber",
   "title": "Thegrabber",
-  "description": "Why Join The Navy When You Can Use Thegrabber",
+  "description": "If buying is not owning than piracy isn't stealing!",
   "icon": "icon.png",
-  "author": "dck",
+  "author": "SudoSaturn",
   "categories": [
     "Web"
   ],
@@ -16,13 +16,20 @@
       "type": "textfield",
       "required": true,
       "title": "API Key"
+    },
+    {
+      "name": "downloadir",
+      "description": "Directory where downloads will be saved (defaults to ~/Downloads)",
+      "type": "textfield",
+      "required": false,
+      "title": "Download Directory"
     }
   ],
   "commands": [
     {
       "name": "downloadLinks",
       "title": "Download Links",
-      "description": "Download one or more links (magnet or direct), unlocks and downloads automatically, zips if multiple.",
+      "description": "Download one or more links, zips if multiple.",
       "mode": "view",
       "icon": "icon.png",
       "src": "src/downloadLinks.tsx"

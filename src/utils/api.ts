@@ -10,25 +10,33 @@ const AGENT_NAME = "Raycast";
 
 export async function resolveMagnet(magnet: string): Promise<Link[]> {
   const { apikey } = getPreferenceValues<Preferences>();
-  const addResp = await axios.get("https://api.alldebrid.com/v4/magnet/upload", {
-    params: {
-      apikey,
-      agent: AGENT_NAME,
-      magnet,
-    },
-  });
-  if (addResp.data.status === "error") throw new Error("Failed to add magnet link");
-  const magnetId = addResp.data.data.id;
-  let status = "";
-  let links: Link[] = [];
-  for (let i = 0; i < 30; ++i) { // up to ~30s
-    const statusResp = await axios.get("https://api.alldebrid.com/v4/magnet/status", {
+  const addResp = await axios.get(
+    "https://api.alldebrid.com/v4/magnet/upload",
+    {
       params: {
         apikey,
         agent: AGENT_NAME,
-        id: magnetId,
+        magnet,
       },
-    });
+    }
+  );
+  if (addResp.data.status === "error")
+    throw new Error("Failed to add magnet link");
+  const magnetId = addResp.data.data.id;
+  let status = "";
+  let links: Link[] = [];
+  for (let i = 0; i < 30; ++i) {
+    // up to ~30s
+    const statusResp = await axios.get(
+      "https://api.alldebrid.com/v4/magnet/status",
+      {
+        params: {
+          apikey,
+          agent: AGENT_NAME,
+          id: magnetId,
+        },
+      }
+    );
     if (statusResp.data.status === "success") {
       const magnetData = statusResp.data.data.magnets[0];
       status = magnetData.status;
@@ -39,21 +47,26 @@ export async function resolveMagnet(magnet: string): Promise<Link[]> {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
-  if (status !== "Ready" || links.length === 0) throw new Error("Magnet not ready or no links found");
+  if (status !== "Ready" || links.length === 0)
+    throw new Error("Magnet not ready or no links found");
   return links;
 }
 
-export async function fetchGetMagnetContainer(magnetId: number, outDir: string): Promise<{ filePath: string, contentType: string }> {
+export async function fetchGetMagnetContainer(
+  magnetId: number,
+  outDir: string
+): Promise<{ filePath: string; contentType: string }> {
   const url = `https://alldebrid.com/getmagnet/${magnetId}`;
   const outPath = path.join(outDir, `getmagnet-${magnetId}`);
   const response = await axios.get(url, {
     responseType: "stream",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Referer": "https://alldebrid.com/"
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "*/*",
+      Referer: "https://alldebrid.com/",
     },
-    maxRedirects: 5
+    maxRedirects: 5,
   });
   let fileName = undefined;
   const cd = response.headers["content-disposition"];
@@ -65,8 +78,10 @@ export async function fetchGetMagnetContainer(magnetId: number, outDir: string):
   if (!filePath) {
     let ext = "bin";
     if (response.headers["content-type"]?.includes("zip")) ext = "zip";
-    else if (response.headers["content-type"]?.includes("octet-stream")) ext = "bin";
-    else if (response.headers["content-type"]?.includes("text/plain")) ext = "txt";
+    else if (response.headers["content-type"]?.includes("octet-stream"))
+      ext = "bin";
+    else if (response.headers["content-type"]?.includes("text/plain"))
+      ext = "txt";
     filePath = `${outPath}.${ext}`;
   }
   const writer = fs.createWriteStream(filePath);
@@ -78,7 +93,6 @@ export async function fetchGetMagnetContainer(magnetId: number, outDir: string):
   });
   return { filePath, contentType: response.headers["content-type"] ?? "" };
 }
-
 
 export type Link = {
   link: string;
@@ -103,12 +117,15 @@ export const getSavedLinks = async () => {
   const { apikey } = getPreferenceValues<Preferences>();
 
   try {
-    const { data } = await axios.get("https://api.alldebrid.com/v4/user/links", {
-      params: {
-        apikey: apikey,
-        agent: AGENT_NAME,
-      },
-    });
+    const { data } = await axios.get(
+      "https://api.alldebrid.com/v4/user/links",
+      {
+        params: {
+          apikey: apikey,
+          agent: AGENT_NAME,
+        },
+      }
+    );
 
     const data2 = data as AllDebridSaveResponse;
 
@@ -142,12 +159,15 @@ export const getSavedMagnets = async () => {
   const { apikey } = getPreferenceValues<Preferences>();
 
   try {
-    const { data } = await axios.get("https://api.alldebrid.com/v4/magnet/status", {
-      params: {
-        apikey: apikey,
-        agent: AGENT_NAME,
-      },
-    });
+    const { data } = await axios.get(
+      "https://api.alldebrid.com/v4/magnet/status",
+      {
+        params: {
+          apikey: apikey,
+          agent: AGENT_NAME,
+        },
+      }
+    );
 
     const data2 = data as AllDebridSavedMagnetsResponse;
 
@@ -170,13 +190,16 @@ export const deleteSavedLink = async (link: string) => {
   const { apikey } = getPreferenceValues<Preferences>();
 
   try {
-    const { data } = await axios.get("https://api.alldebrid.com/v4/user/links/delete", {
-      params: {
-        apikey: apikey,
-        agent: AGENT_NAME,
-        link: link,
-      },
-    });
+    const { data } = await axios.get(
+      "https://api.alldebrid.com/v4/user/links/delete",
+      {
+        params: {
+          apikey: apikey,
+          agent: AGENT_NAME,
+          link: link,
+        },
+      }
+    );
 
     const { status } = data as DeletionResponse;
 
@@ -195,13 +218,16 @@ export const deleteSavedMagnet = async (magnetId: string) => {
   const { apikey } = getPreferenceValues<Preferences>();
 
   try {
-    const { data } = await axios.get("https://api.alldebrid.com/v4/magnet/delete", {
-      params: {
-        apikey: apikey,
-        agent: AGENT_NAME,
-        id: magnetId,
-      },
-    });
+    const { data } = await axios.get(
+      "https://api.alldebrid.com/v4/magnet/delete",
+      {
+        params: {
+          apikey: apikey,
+          agent: AGENT_NAME,
+          id: magnetId,
+        },
+      }
+    );
 
     const { status } = data as DeletionResponse;
 
@@ -234,7 +260,9 @@ export type UploadMagnetParams = {
   files: ReadStream[];
 };
 
-export const uploadMagnet = (values: UploadMagnetParams): Promise<AllDebridUnlockResponse> => {
+export const uploadMagnet = (
+  values: UploadMagnetParams
+): Promise<AllDebridUnlockResponse> => {
   const { apikey } = getPreferenceValues<Preferences>();
   const formData = new FormData();
 
@@ -274,16 +302,40 @@ export const debridUrl = (link: string): Promise<Result<string, string>> => {
       },
     })
     .then(({ data }) => {
-      const {
-        status,
-        data: { link },
-      } = data as AllDebridUnlockUrlResponse;
+      console.log("[debridUrl] API Response:", JSON.stringify(data, null, 2));
+
+      if (!data || typeof data !== "object") {
+        console.error("[debridUrl] Invalid response data:", data);
+        return Result.Error("Invalid API response");
+      }
+
+      const response = data as AllDebridUnlockUrlResponse;
+
+      if (!response.data || typeof response.data !== "object") {
+        console.error("[debridUrl] Missing or invalid data field:", response);
+        return Result.Error("Missing data in API response");
+      }
+
+      const { status } = response;
+      const { link: unlockLink } = response.data;
 
       if (status === "error") {
-        return Result.Error("");
-      } else {
-        return Result.Ok(link);
+        console.error("[debridUrl] API returned error status");
+        return Result.Error("API returned error status");
       }
+
+      if (!unlockLink) {
+        console.error("[debridUrl] No link found in response:", response.data);
+        return Result.Error("No download link found in response");
+      }
+
+      return Result.Ok(unlockLink);
+    })
+    .catch((error) => {
+      console.error("[debridUrl] Request failed:", error);
+      return Result.Error(
+        `Request failed: ${error.message || "Unknown error"}`
+      );
     });
 };
 
