@@ -11,9 +11,8 @@ import React, { useEffect, useState } from "react";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
-import { debridUrl } from "./utils/api";
+import { debridUrl, resolveMagnet } from "./utils/api";
 import { getPreferenceValues } from "@raycast/api";
-import archiver from "archiver";
 
 interface Preferences {
   apikey: string;
@@ -29,21 +28,32 @@ const HISTORY_FILE = path.join(
 );
 
 function extractLinks(text: string): string[] {
-  const regex = /(https?:\/\/[^\s"']+)/gi;
-  const matches = text.match(regex) || [];
+  const httpRegex = /(https?:\/\/[^\s"']+)/gi;
+  const httpMatches = text.match(httpRegex) || [];
 
-  const urls = matches
+  const magnetRegex = /(magnet:\?[^\s"']+)/gi;
+  const magnetMatches = text.match(magnetRegex) || [];
+
+  const allMatches = [...httpMatches, ...magnetMatches];
+
+  const urls = allMatches
     .map((url) => url.trim())
     .filter((url) => {
-      try {
-        new URL(url);
-        return true;
-      } catch {
-        return false;
+      if (url.startsWith('http')) {
+        try {
+          new URL(url);
+          return true;
+        } catch {
+          return false;
+        }
       }
+      if (url.startsWith('magnet:')) {
+        return url.includes('xt=urn:btih:');
+      }
+      return false;
     });
 
-  console.log(`[extractLinks] Found ${urls.length} links:`, urls);
+  console.log(`[extractLinks] Grabbed ${urls.length} links (${httpMatches.length} HTTP, ${magnetMatches.length} magnet):`, urls);
   return urls;
 }
 
@@ -68,7 +78,7 @@ export default function Command() {
           const foundLinks = extractLinks(clipboardText);
           if (foundLinks.length > 0) {
             console.log(
-              `[Clipboard] Found ${foundLinks.length} links in clipboard`
+              `[Clipboard] Grabbed ${foundLinks.length} links in clipboard`
             );
             setInput(foundLinks.join("\n"));
           }
@@ -166,7 +176,7 @@ export default function Command() {
     setLoading(true);
     const linkList = extractLinks(input);
     if (linkList.length === 0) {
-      showToast({ title: "No links found", style: Toast.Style.Failure });
+      showToast({ title: "No links grabbed", style: Toast.Style.Failure });
       setLoading(false);
       return;
     }
@@ -175,8 +185,8 @@ export default function Command() {
     if (uniqueLinks.length < linkList.length) {
       const duplicateCount = linkList.length - uniqueLinks.length;
       showToast({
-        title: `${duplicateCount} duplicate link(s) found`,
-        message: "Duplicate links will be processed only once",
+        title: `${duplicateCount} duplicates grabbed`,
+        message: "Duplicates will be processed once",
         style: Toast.Style.Animated,
       });
     }
@@ -224,106 +234,211 @@ export default function Command() {
             });
           }
 
-          console.log(`[Processing] Unlocking link: ${link}`);
-          try {
-            const result = await debridUrl(link);
-            console.log(`[debridUrl] Result:`, result);
-
-            if (result.isOk()) {
-              const downloadUrl = result.value;
-              console.log(`[Success] Got download URL: ${downloadUrl}`);
-
-              let filename = path.basename(new URL(downloadUrl).pathname);
-              if (!filename || filename === "/") {
-                filename = `download-${Date.now()}.bin`;
+          console.log(`[Processing] Processing link: ${link}`);
+          
+          if (link.startsWith('magnet:')) {
+            console.log(`[Magnet] Resolving magnet link...`);
+            
+            const magnetProgressToast = await showToast({
+              title: "Grabbing magnet link",
+              message: "Grabbing magnet link, please wait...",
+              style: Toast.Style.Animated,
+            });
+            
+            try {
+              const magnetLinks = await resolveMagnet(link, (status, attempt, maxAttempts) => {
+                magnetProgressToast.message = `Status: ${status} (${attempt}/${maxAttempts})`;
+              });
+              console.log(`[Magnet] Resolved to ${magnetLinks.length} links`);
+              if (magnetLinks.length > 0) {
+                console.log(`[Magnet] First link example:`, magnetLinks[0].filename);
               }
+              
+              magnetProgressToast.title = "Magnet grabbed!";
+              magnetProgressToast.message = `Grabbed ${magnetLinks.length} files to download`;
+              magnetProgressToast.style = Toast.Style.Success;
+              
+              const magnetFolderName = `magnet-download-${Date.now()}`;
+              const magnetFolderPath = path.join(DOWNLOADS_DIR, magnetFolderName);
+              
+              if (!fs.existsSync(magnetFolderPath)) {
+                fs.mkdirSync(magnetFolderPath, { recursive: true });
+                console.log(`[Magnet] Created folder: ${magnetFolderPath}`);
+              }
+              
+              let magnetDownloadedFiles: string[] = [];
+              let magnetDownloadedFilenames: string[] = [];
+              
+              magnetProgressToast.hide();
+              const downloadProgressToast = await showToast({
+                title: "Downloading files",
+                message: `Starting download of ${magnetLinks.length} files...`,
+                style: Toast.Style.Animated,
+              });
+              
+              for (let i = 0; i < magnetLinks.length; i++) {
+                const magnetLink = magnetLinks[i];
+                const result = await debridUrl(magnetLink.link);
+                console.log(`[debridUrl] Result for magnet link:`, result);
 
-              filename = decodeURIComponent(filename);
-              console.log(`[Download] Starting download of: ${filename}`);
+                if (result.isOk()) {
+                  const downloadUrl = result.value;
+                  console.log(`[Success] Grabbed URL: ${downloadUrl}`);
 
-              const filePath = await downloadFile(downloadUrl, filename);
-              console.log(`[Download] Completed: ${filePath}`);
+                  let filename = magnetLink.filename || path.basename(new URL(downloadUrl).pathname);
+                  if (!filename || filename === "/") {
+                    filename = `download-${Date.now()}.bin`;
+                  }
 
-              downloadedFiles.push(filePath);
-              downloadedFilenames.push(filename);
+                  filename = decodeURIComponent(filename);
+                  console.log(`[Download] Starting to download: ${filename}`);
 
-              if (uniqueLinks.length === 1) {
+                  downloadProgressToast.message = `Downloading ${i + 1}/${magnetLinks.length}: ${filename}`;
+
+                  const filePath = await downloadFileToFolder(downloadUrl, filename, magnetFolderPath);
+                  console.log(`[Download] Completed: ${filePath}`);
+
+                  magnetDownloadedFiles.push(filePath);
+                  magnetDownloadedFilenames.push(filename);
+                  
+                  downloadProgressToast.message = `Completed ${magnetDownloadedFiles.length}/${magnetLinks.length} files`;
+                } else {
+                  console.error(`[Error] Failed to grab magnet link: ${magnetLink.link}`);
+                  showToast({
+                    title: `Failed to grab magnet file: ${magnetLink.filename}`,
+                    style: Toast.Style.Failure,
+                  });
+                }
+              }
+              
+              downloadProgressToast.hide();
+              if (magnetDownloadedFiles.length > 0) {
                 showToast({
-                  title: "Download complete!",
-                  message: filePath,
+                  title: "Download complete! :)",
+                  message: `${magnetDownloadedFiles.length} files downloaded to ${magnetFolderName}`,
                   style: Toast.Style.Success,
+                });
+                
+                saveHistory({
+                  date: new Date().toISOString(),
+                  title: magnetFolderName,
+                  links: [link],
+                  output: magnetFolderPath,
+                  containedFiles: magnetDownloadedFilenames,
                 });
               } else {
                 showToast({
-                  title: `Download ${downloadedFiles.length}/${uniqueLinks.length} complete`,
-                  message: filename,
-                  style: Toast.Style.Success,
+                  title: "No files downloaded",
+                  message: "All files failed to process",
+                  style: Toast.Style.Failure,
                 });
               }
-            } else {
-              console.error(`[Error] Failed to unlock link: ${link}`, result);
-              const errorMessage = result.isError()
-                ? result.getError()
-                : "Unknown error";
+            } catch (error) {
+              console.error(`[Magnet Error] Failed to resolve magnet:`, error);
+              magnetProgressToast.hide();
               showToast({
-                title: "Failed to unlock link",
-                message: `${link}: ${errorMessage}`,
+                title: "Failed to grab magnet",
+                message: error instanceof Error ? error.message : "Unknown error wtf",
+                style: Toast.Style.Failure,
+              });
+              continue;
+            }
+          } else {
+            try {
+              const result = await debridUrl(link);
+              console.log(`[debridUrl] Result:`, result);
+
+              if (result.isOk()) {
+                const downloadUrl = result.value;
+                console.log(`[Success] Grabbed download URL: ${downloadUrl}`);
+
+                let filename = path.basename(new URL(downloadUrl).pathname);
+                if (!filename || filename === "/") {
+                  filename = `download-${Date.now()}.bin`;
+                }
+
+                filename = decodeURIComponent(filename);
+                console.log(`[Download] Starting to download: ${filename}`);
+
+                const filePath = await downloadFile(downloadUrl, filename);
+                console.log(`[Download] Completed: ${filePath}`);
+
+                downloadedFiles.push(filePath);
+                downloadedFilenames.push(filename);
+
+                if (uniqueLinks.length === 1) {
+                  showToast({
+                    title: "Download complete! :)",
+                    message: filePath,
+                    style: Toast.Style.Success,
+                  });
+                } else {
+                  showToast({
+                    title: `Download ${downloadedFiles.length}/${uniqueLinks.length} complete`,
+                    message: filename,
+                    style: Toast.Style.Success,
+                  });
+                }
+              } else {
+                console.error(`[Error] Failed to grab link: ${link}`, result);
+                const errorMessage = result.isError()
+                  ? result.getError()
+                  : "Unknown error";
+                showToast({
+                  title: "Failed to grab link",
+                  message: `${link}: ${errorMessage}`,
+                  style: Toast.Style.Failure,
+                });
+              }
+            } catch (err: any) {
+              console.error(`[Error] Exception during regular link processing:`, err);
+              if (err === "Download cancelled by user") continue;
+              showToast({
+                title: "Download error",
+                message: err.message || "Unknown error occurred wtf",
                 style: Toast.Style.Failure,
               });
             }
-          } catch (err: any) {
-            console.error(`[Error] Exception during link processing:`, err);
-            if (err === "Download cancelled by user") continue;
-            showToast({
-              title: "Download error",
-              message: err.message || "Unknown error occurred",
-              style: Toast.Style.Failure,
-            });
           }
         } catch (err: any) {
           if (err === "Download cancelled by user") continue;
           console.error(`[Error] Outer catch - Download error:`, err);
           showToast({
             title: "Download error",
-            message: err.message || "Unknown error occurred",
+            message: err.message || "Unknown error occurred wtf",
             style: Toast.Style.Failure,
           });
         }
       }
 
       if (downloadedFiles.length > 1) {
-        const zipToast = await showToast({
-          title: "Zipping files",
-          message: `Combining ${downloadedFiles.length} files into a single archive...`,
-          style: Toast.Style.Animated,
-        });
-
-        const zipFilename = `alldebrid-downloads-${Date.now()}.zip`;
-        const zipFilePath = path.join(DOWNLOADS_DIR, zipFilename);
-
-        await zipFiles(downloadedFiles, zipFilePath);
+        console.log(`[Multiple Files] Downloaded, creating folder...`);
+        
+        const multiDownloadFolderName = `multi-download-${Date.now()}`;
+        const multiDownloadFolderPath = path.join(DOWNLOADS_DIR, multiDownloadFolderName);
+        
+        if (!fs.existsSync(multiDownloadFolderPath)) {
+          fs.mkdirSync(multiDownloadFolderPath, { recursive: true });
+        }
+        
+        for (const filePath of downloadedFiles) {
+          const filename = path.basename(filePath);
+          const newPath = path.join(multiDownloadFolderPath, filename);
+          fs.renameSync(filePath, newPath);
+        }
 
         saveHistory({
           date: new Date().toISOString(),
-          title: zipFilename,
+          title: multiDownloadFolderName,
           links: uniqueLinks,
-          output: zipFilePath,
+          output: multiDownloadFolderPath,
           containedFiles: downloadedFilenames,
         });
 
-        zipToast.hide();
         showToast({
           title: "All downloads complete!",
-          message: `${downloadedFiles.length} files zipped to ${zipFilename}`,
+          message: `${downloadedFiles.length} files organized in ${multiDownloadFolderName}`,
           style: Toast.Style.Success,
-        });
-
-        downloadedFiles.forEach((file) => {
-          try {
-            fs.unlinkSync(file);
-          } catch (err) {
-            console.error(`Failed to delete ${file}:`, err);
-          }
         });
       } else if (downloadedFiles.length === 1) {
         const filePath = downloadedFiles[0];
@@ -360,7 +475,7 @@ export default function Command() {
             {
               (
                 <Action
-                  title="Show Download History"
+                  title="Show History"
                   onAction={handleShowHistory}
                 />
               ) as any
@@ -374,7 +489,7 @@ export default function Command() {
           <Form.TextArea
             id="input"
             title="Paste links"
-            placeholder="Paste direct links here (one per line)..."
+            placeholder="Paste direct links or magnet links here (one per line)..."
             value={input}
             onChange={setInput}
             autoFocus
@@ -386,8 +501,12 @@ export default function Command() {
 }
 
 async function downloadFile(url: string, filename: string) {
+  return downloadFileToFolder(url, filename, DOWNLOADS_DIR);
+}
+
+async function downloadFileToFolder(url: string, filename: string, targetDir: string) {
   filename = filename.replace(/[/\\?%*:|"<>]/g, "_");
-  const filePath = path.join(DOWNLOADS_DIR, filename);
+  const filePath = path.join(targetDir, filename);
   const writer = fs.createWriteStream(filePath);
 
   const progressToast = await showToast({
@@ -483,36 +602,6 @@ async function downloadFile(url: string, filename: string) {
   }
 }
 
-async function zipFiles(
-  filePaths: string[],
-  outputPath: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(outputPath);
-    const archive = archiver("zip", {
-      zlib: { level: 6 },
-    });
-
-    output.on("close", () => {
-      resolve(outputPath);
-    });
-
-    archive.on("error", (err: Error) => {
-      reject(err);
-    });
-
-    archive.pipe(output);
-
-    for (const filePath of filePaths) {
-      if (fs.existsSync(filePath)) {
-        const filename = path.basename(filePath);
-        archive.file(filePath, { name: filename });
-      }
-    }
-
-    archive.finalize();
-  });
-}
 
 function saveHistory(entry: any) {
   let history = [];

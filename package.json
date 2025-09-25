@@ -29,10 +29,19 @@
     {
       "name": "downloadLinks",
       "title": "Download Links",
-      "description": "Download one or more links, zips if multiple.",
+      "description": "Download direct links and magnet links, zips if multiple.",
       "mode": "view",
       "icon": "icon.png",
       "src": "src/downloadLinks.tsx"
+    },
+    {
+      "name": "myMagnets",
+      "title": "My Magnets",
+      "subtitle": "TheGrabber",
+      "description": "Display and manage saved magnets",
+      "mode": "view",
+      "icon": "icon.png",
+      "src": "src/myMagnets.tsx"
     }
   ],
   "dependencies": {

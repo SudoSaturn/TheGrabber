@@ -10,9 +10,6 @@ export function formatBytes(bytes: number, decimals = 2) {
     "GiB",
     "TiB",
     "PiB",
-    "EiB",
-    "ZiB",
-    "YiB",
   ];
 
   const i = Math.floor(Math.log(bytes) / Math.log(k));

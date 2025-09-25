@@ -8,8 +8,10 @@ import path from "path";
 
 const AGENT_NAME = "Raycast";
 
-export async function resolveMagnet(magnet: string): Promise<Link[]> {
+export async function resolveMagnet(magnet: string, progressCallback?: (status: string, attempt: number, maxAttempts: number) => void): Promise<Link[]> {
   const { apikey } = getPreferenceValues<Preferences>();
+  console.log(`[resolveMagnet] Starting...`);
+  
   const addResp = await axios.get(
     "https://api.alldebrid.com/v4/magnet/upload",
     {
@@ -20,13 +22,25 @@ export async function resolveMagnet(magnet: string): Promise<Link[]> {
       },
     }
   );
-  if (addResp.data.status === "error")
-    throw new Error("Failed to add magnet link");
+  
+  console.log(`[resolveMagnet]status:`, addResp.data.status);
+  if (addResp.data.data?.id) {
+    console.log(`[resolveMagnet] Magnet ID:`, addResp.data.data.id);
+  }
+  
+  if (addResp.data.status === "error") {
+    const errorMsg = addResp.data.error?.message || "Failed to add magnet";
+    throw new Error(errorMsg);
+  }
   const magnetId = addResp.data.data.id;
+  console.log(`[resolveMagnet] Magnet ID: ${magnetId}`);
+  
   let status = "";
   let links: Link[] = [];
-  for (let i = 0; i < 30; ++i) {
-    // up to ~30s
+  const maxAttempts = 60; // Increase to 60 attempts (up to ~60s)
+  for (let i = 0; i < maxAttempts; ++i) {
+    console.log(`[resolveMagnet] Checking status (attempt ${i + 1}/${maxAttempts})...`);
+    
     const statusResp = await axios.get(
       "https://api.alldebrid.com/v4/magnet/status",
       {
@@ -37,18 +51,41 @@ export async function resolveMagnet(magnet: string): Promise<Link[]> {
         },
       }
     );
+    
+    console.log(`[resolveMagnet] Status:`, statusResp.data.status);
+    if (statusResp.data.status === "success" && statusResp.data.data?.magnets) {
+      console.log(`[resolveMagnet] Found ${statusResp.data.data.magnets.length} magnets in response`);
+    }
+    
     if (statusResp.data.status === "success") {
       const magnetData = statusResp.data.data.magnets[0];
       status = magnetData.status;
+      console.log(`[resolveMagnet] Status: ${status}`);
+      
+      if (progressCallback) {
+        progressCallback(status, i + 1, maxAttempts);
+      }
+      
       if (status === "Ready") {
         links = magnetData.links;
+        console.log(`[resolveMagnet] Ready! Found ${links.length} links`);
         break;
       }
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
-  if (status !== "Ready" || links.length === 0)
-    throw new Error("Magnet not ready or no links found");
+  
+  console.log(`[resolveMagnet] Final status: ${status}, links: ${links.length}`);
+  
+  if (status !== "Ready" || links.length === 0) {
+    if (status === "Downloading") {
+      throw new Error(`Still downloading after ${maxAttempts} seconds. This torrent may take longer to process. Please try again later.`);
+    } else if (status === "Error") {
+      throw new Error("Processing failed. Check if the magnet is valid and torrent is available.");
+    } else {
+      throw new Error(`Processing incomplete. Status: ${status}. :( .`);
+    }
+  }
   return links;
 }
 
